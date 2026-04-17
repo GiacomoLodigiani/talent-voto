@@ -1,17 +1,64 @@
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, jsonify, send_file
 import csv
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 
-with open("partecipanti.csv", newline="", encoding="utf-8") as f:
-    reader = csv.DictReader(f)
-    codici_validi = {row["codice"].strip() for row in reader if row.get("codice")}
+CODICI_FILE = "codici_autorizzati.csv"
+PARTECIPANTI_FILE = "partecipanti.csv"
+VOTI_FILE = "voti.csv"
 
-voti = []
+def load_codici():
+    if not os.path.exists(CODICI_FILE):
+        return set()
+    with open(CODICI_FILE, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return {row["codice"].strip() for row in reader if row.get("codice")}
+
+def load_partecipanti():
+    if not os.path.exists(PARTECIPANTI_FILE):
+        return []
+    with open(PARTECIPANTI_FILE, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return [row["nome"].strip() for row in reader if row.get("nome")]
+
+def load_voti():
+    if not os.path.exists(VOTI_FILE):
+        return []
+    with open(VOTI_FILE, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        return list(reader)
+
+def has_voted(codice):
+    if not os.path.exists(VOTI_FILE):
+        return False
+    with open(VOTI_FILE, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row.get("codice", "").strip() == codice:
+                return True
+    return False
+
+def save_vote(codice, voto):
+    file_exists = os.path.exists(VOTI_FILE)
+    with open(VOTI_FILE, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["timestamp", "codice", "voto"])
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow({
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "codice": codice,
+            "voto": voto
+        })
 
 @app.route("/")
 def index():
+    partecipanti = load_partecipanti()
+    opzioni_html = ""
+    for i, nome in enumerate(partecipanti, start=1):
+        opzioni_html += f'<div class="candidate"><label><input type="radio" name="voto" value="{i}" required /> {i} - {nome}</label></div>'
+
     return render_template_string("""
 <!DOCTYPE html>
 <html lang="it">
@@ -22,7 +69,7 @@ def index():
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 600px;
+      max-width: 650px;
       margin: 40px auto;
       padding: 20px;
       background: #f7f7f7;
@@ -91,11 +138,7 @@ def index():
     <div id="voto-sezione">
       <h2>Codice valido. Scegli il tuo preferito:</h2>
       <form id="form-voto">
-        <div class="candidate"><label><input type="radio" name="voto" value="1" required /> 1 - Primo Finalista</label></div>
-        <div class="candidate"><label><input type="radio" name="voto" value="2" required /> 2 - Secondo Finalista</label></div>
-        <div class="candidate"><label><input type="radio" name="voto" value="3" required /> 3 - Terzo Finalista</label></div>
-        <div class="candidate"><label><input type="radio" name="voto" value="4" required /> 4 - Quarto Finalista</label></div>
-        <div class="candidate"><label><input type="radio" name="voto" value="5" required /> 5 - Quinto Finalista</label></div>
+        {{ opzioni_html|safe }}
         <button type="submit">Vota</button>
       </form>
       <p id="feedback"></p>
@@ -129,7 +172,7 @@ def index():
           document.getElementById("login").style.display = "none";
           document.getElementById("voto-sezione").style.display = "block";
         } else {
-          errore.textContent = "Codice non valido.";
+          errore.textContent = "Codice non valido o già usato.";
           errore.style.display = "block";
         }
       })
@@ -166,14 +209,16 @@ def index():
   </script>
 </body>
 </html>
-""")
+""", opzioni_html=opzioni_html)
 
 @app.route("/check", methods=["POST"])
 def check():
     dati = request.get_json()
     codice = dati.get("codice", "").strip()
 
-    if codice in codici_validi:
+    codici_validi = load_codici()
+
+    if codice in codici_validi and not has_voted(codice):
         return jsonify({"allowed": True})
     return jsonify({"allowed": False})
 
@@ -183,12 +228,18 @@ def vota():
     codice = dati.get("codice", "").strip()
     voto = dati.get("voto", "").strip()
 
+    codici_validi = load_codici()
+
     if codice not in codici_validi:
         return jsonify({"success": False, "message": "Codice non valido."})
 
-    voti.append({"codice": codice, "voto": voto})
+    if has_voted(codice):
+        return jsonify({"success": False, "message": "Hai già votato con questo codice."})
+
+    save_vote(codice, voto)
     return jsonify({"success": True, "message": "Voto registrato con successo!"})
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+@app.route("/voti")
+def voti():
+    dati = load_voti()
+    return jso
