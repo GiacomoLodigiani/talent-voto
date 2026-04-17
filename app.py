@@ -1,13 +1,15 @@
-from flask import Flask, render_template_string, request, jsonify, Response
+from flask import Flask, render_template_string, request, jsonify, Response, abort
 import csv
 import os
 import io
 from datetime import datetime
+from collections import Counter
 
 app = Flask(__name__)
 
 CODICI_FILE = "codici_autorizzati.csv"
 PARTECIPANTI_FILE = "partecipanti.csv"
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "cambia-questa-chiave")
 
 voti_memoria = []
 
@@ -27,10 +29,7 @@ def load_partecipanti():
 
 def has_voted(codice):
     codice = codice.strip()
-    for voto in voti_memoria:
-        if voto["codice"] == codice:
-            return True
-    return False
+    return any(voto["codice"] == codice for voto in voti_memoria)
 
 def save_vote(codice, voto):
     voti_memoria.append({
@@ -45,6 +44,18 @@ def votes_to_csv():
     writer.writeheader()
     writer.writerows(voti_memoria)
     return output.getvalue()
+
+def leaderboard_top5():
+    partecipanti = load_partecipanti()
+    counter = Counter()
+    for voto in voti_memoria:
+        try:
+            idx = int(voto["voto"]) - 1
+            if 0 <= idx < len(partecipanti):
+                counter[partecipanti[idx]] += 1
+        except:
+            pass
+    return counter.most_common(5)
 
 @app.route("/")
 def index():
@@ -116,10 +127,6 @@ def index():
     #feedback {
       margin-top: 12px;
     }
-    a {
-      display: inline-block;
-      margin-top: 14px;
-    }
   </style>
 </head>
 <body>
@@ -141,9 +148,6 @@ def index():
       </form>
       <p id="feedback"></p>
     </div>
-
-    <a href="/voti" target="_blank">Vedi voti</a><br/>
-    <a href="/voti.csv" target="_blank">Scarica voti CSV</a>
   </div>
 
   <script>
@@ -216,9 +220,7 @@ def index():
 def check():
     dati = request.get_json()
     codice = dati.get("codice", "").strip()
-
     codici_validi = load_codici()
-
     if codice in codici_validi and not has_voted(codice):
         return jsonify({"allowed": True})
     return jsonify({"allowed": False})
@@ -228,7 +230,6 @@ def vota():
     dati = request.get_json()
     codice = dati.get("codice", "").strip()
     voto = dati.get("voto", "").strip()
-
     codici_validi = load_codici()
 
     if codice not in codici_validi:
@@ -252,6 +253,37 @@ def voti_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=voti.csv"}
     )
+
+@app.route("/admin/risultati")
+def admin_risultati():
+    key = request.args.get("key", "")
+    if key != ADMIN_KEY:
+        abort(403)
+
+    top5 = leaderboard_top5()
+    rows = "".join([f"<tr><td>{i+1}</td><td>{nome}</td><td>{voti}</td></tr>" for i, (nome, voti) in enumerate(top5)])
+
+    return f"""
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Classifica</title>
+      <style>
+        body {{ font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 20px; }}
+        table {{ width: 100%; border-collapse: collapse; }}
+        th, td {{ border: 1px solid #ccc; padding: 10px; text-align: left; }}
+        th {{ background: #f0f0f0; }}
+      </style>
+    </head>
+    <body>
+      <h1>Classifica Top 5</h1>
+      <table>
+        <tr><th>Posizione</th><th>Partecipante</th><th>Voti</th></tr>
+        {rows if rows else '<tr><td colspan="3">Nessun voto ancora</td></tr>'}
+      </table>
+    </body>
+    </html>
+    """
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
