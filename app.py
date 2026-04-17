@@ -1,12 +1,14 @@
 from flask import Flask, render_template_string, request, jsonify
 import csv
+import os
 
 app = Flask(__name__)
 
-# Carica lista partecipanti
 with open("partecipanti.csv", newline="", encoding="utf-8") as f:
     reader = csv.DictReader(f)
-    partecipanti = [row for row in reader]
+    codici_validi = {row["codice"].strip() for row in reader if row.get("codice")}
+
+voti = []
 
 @app.route("/")
 def index():
@@ -15,73 +17,125 @@ def index():
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Talent Voting</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; }
-    label { display: block; margin: 10px 0 5px; }
-    input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
-    button { padding: 10px 20px; }
-    #voto-sezione { display: none; margin-top: 20px; }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f7f7f7;
+    }
+    .box {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    button {
+      margin-top: 16px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      background: #4a67ff;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #3a55e0;
+    }
+    #voto-sezione {
+      display: none;
+      margin-top: 20px;
+    }
+    .candidate {
+      margin: 8px 0;
+      padding: 8px 0;
+    }
+    #errore {
+      color: #c00;
+      margin-top: 12px;
+      display: none;
+    }
+    #feedback {
+      margin-top: 12px;
+    }
   </style>
 </head>
 <body>
-  <h1>Talent Show – Vota il vincitore</h1>
-  <div id="login">
-    <label>Nome</label>
-    <input type="text" id="nome" autofocus />
-    <label>Cognome</label>
-    <input type="text" id="cognome" />
-    <button onclick="login()">Accedi</button>
-    <p id="errore" style="color: red; display: none;"></p>
-  </div>
+  <div class="box">
+    <h1>Talent Show - Vota</h1>
 
-  <div id="voto-sezione">
-    <h2>Ciao <span id="benvenuto"></span>, scegli il tuo preferito:</h2>
-    <form id="form-voto">
-      <label><input type="radio" name="voto" value="1" required /> 1 – Primo Finalista</label><br/>
-      <label><input type="radio" name="voto" value="2" required /> 2 – Secondo Finalista</label><br/>
-      <label><input type="radio" name="voto" value="3" required /> 3 – Terzo Finalista</label><br/>
-      <label><input type="radio" name="voto" value="4" required /> 4 – Quarto Finalista</label><br/>
-      <label><input type="radio" name="voto" value="5" required /> 5 – Quinto Finalista</label><br/>
-      <button type="submit">Vota</button>
-    </form>
-    <p id="feedback"></p>
+    <div id="login">
+      <label for="codice">Inserisci il tuo codice</label>
+      <input type="text" id="codice" autocomplete="off" autofocus />
+      <button onclick="login()">Accedi</button>
+      <p id="errore"></p>
+    </div>
+
+    <div id="voto-sezione">
+      <h2>Codice valido. Scegli il tuo preferito:</h2>
+      <form id="form-voto">
+        <div class="candidate"><label><input type="radio" name="voto" value="1" required /> 1 - Primo Finalista</label></div>
+        <div class="candidate"><label><input type="radio" name="voto" value="2" required /> 2 - Secondo Finalista</label></div>
+        <div class="candidate"><label><input type="radio" name="voto" value="3" required /> 3 - Terzo Finalista</label></div>
+        <div class="candidate"><label><input type="radio" name="voto" value="4" required /> 4 - Quarto Finalista</label></div>
+        <div class="candidate"><label><input type="radio" name="voto" value="5" required /> 5 - Quinto Finalista</label></div>
+        <button type="submit">Vota</button>
+      </form>
+      <p id="feedback"></p>
+    </div>
   </div>
 
   <script>
-    let nomeInLista = null;
+    let codiceValido = null;
 
     function login() {
-      const nome = document.getElementById("nome").value.trim();
-      const cognome = document.getElementById("cognome").value.trim();
-      document.getElementById("errore").style.display = "none";
+      const codice = document.getElementById("codice").value.trim();
+      const errore = document.getElementById("errore");
+      errore.style.display = "none";
+      errore.textContent = "";
 
-      if (!nome || !cognome) {
-        document.getElementById("errore").textContent = "Scrivi nome e cognome.";
-        document.getElementById("errore").style.display = "block";
+      if (!codice) {
+        errore.textContent = "Inserisci un codice.";
+        errore.style.display = "block";
         return;
       }
 
       fetch("/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, cognome })
+        body: JSON.stringify({ codice })
       })
       .then(r => r.json())
       .then(data => {
         if (data.allowed) {
-          nomeInLista = data.nome;
+          codiceValido = codice;
           document.getElementById("login").style.display = "none";
-          document.getElementById("benvenuto").textContent = nomeInLista;
           document.getElementById("voto-sezione").style.display = "block";
         } else {
-          document.getElementById("errore").textContent = "Errore: non sei nella lista o hai sbagliato nome/cognome.";
-          document.getElementById("errore").style.display = "block";
+          errore.textContent = "Codice non valido.";
+          errore.style.display = "block";
         }
       })
       .catch(() => {
-        document.getElementById("errore").textContent = "Errore di rete.";
-        document.getElementById("errore").style.display = "block";
+        errore.textContent = "Errore di rete.";
+        errore.style.display = "block";
       });
     }
 
@@ -92,12 +146,21 @@ def index():
       fetch("/vota", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome: nomeInLista, voto })
+        body: JSON.stringify({ codice: codiceValido, voto })
       })
       .then(r => r.json())
       .then(data => {
-        document.getElementById("feedback").textContent = data.message;
-        document.getElementById("feedback").style.color = data.success ? "green" : "red";
+        const feedback = document.getElementById("feedback");
+        feedback.textContent = data.message;
+        feedback.style.color = data.success ? "green" : "red";
+        if (data.success) {
+          document.getElementById("form-voto").reset();
+        }
+      })
+      .catch(() => {
+        const feedback = document.getElementById("feedback");
+        feedback.textContent = "Errore di rete.";
+        feedback.style.color = "red";
       });
     });
   </script>
@@ -108,27 +171,24 @@ def index():
 @app.route("/check", methods=["POST"])
 def check():
     dati = request.get_json()
-    nome = dati.get("nome", "").strip()
-    cognome = dati.get("cognome", "").strip()
+    codice = dati.get("codice", "").strip()
 
-    for p in partecipanti:
-        if p["nome"].strip().lower() == nome.lower() and p["cognome"].strip().lower() == cognome.lower():
-            return jsonify({"allowed": True, "nome": p["nome"] + " " + p["cognome"]})
-
+    if codice in codici_validi:
+        return jsonify({"allowed": True})
     return jsonify({"allowed": False})
-
-# Qui puoi salvare i voti in un file CSV (es. voti.csv)
-voti = []
 
 @app.route("/vota", methods=["POST"])
 def vota():
     dati = request.get_json()
-    nome = dati.get("voto", "")
-    voto = dati.get("voto", "")
+    codice = dati.get("codice", "").strip()
+    voto = dati.get("voto", "").strip()
 
-    # salva il voto (da migliorare con logica contro doppi voti, se vuoi)
-    voti.append({"nome": nome, "voto": voto})
-    return jsonify({"success": True, "message": "Voto registrato! Grazie!"})
+    if codice not in codici_validi:
+        return jsonify({"success": False, "message": "Codice non valido."})
+
+    voti.append({"codice": codice, "voto": voto})
+    return jsonify({"success": True, "message": "Voto registrato con successo!"})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
