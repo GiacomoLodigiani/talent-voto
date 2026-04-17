@@ -9,6 +9,14 @@ CODICI_FILE = "codici_autorizzati.csv"
 PARTECIPANTI_FILE = "partecipanti.csv"
 VOTI_FILE = "voti.csv"
 
+def init_voti_file():
+    if not os.path.exists(VOTI_FILE):
+        with open(VOTI_FILE, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=["timestamp", "codice", "voto"])
+            writer.writeheader()
+
+init_voti_file()
+
 def load_codici():
     if not os.path.exists(CODICI_FILE):
         return set()
