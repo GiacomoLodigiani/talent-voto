@@ -1,21 +1,15 @@
-from flask import Flask, render_template_string, request, jsonify, send_file
+from flask import Flask, render_template_string, request, jsonify, Response
 import csv
 import os
+import io
 from datetime import datetime
 
 app = Flask(__name__)
 
 CODICI_FILE = "codici_autorizzati.csv"
 PARTECIPANTI_FILE = "partecipanti.csv"
-VOTI_FILE = "voti.csv"
 
-def init_voti_file():
-    if not os.path.exists(VOTI_FILE):
-        with open(VOTI_FILE, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["timestamp", "codice", "voto"])
-            writer.writeheader()
-
-init_voti_file()
+voti_memoria = []
 
 def load_codici():
     if not os.path.exists(CODICI_FILE):
@@ -31,34 +25,26 @@ def load_partecipanti():
         reader = csv.DictReader(f)
         return [row["nome"].strip() for row in reader if row.get("nome")]
 
-def load_voti():
-    if not os.path.exists(VOTI_FILE):
-        return []
-    with open(VOTI_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        return list(reader)
-
 def has_voted(codice):
-    if not os.path.exists(VOTI_FILE):
-        return False
-    with open(VOTI_FILE, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if row.get("codice", "").strip() == codice:
-                return True
+    codice = codice.strip()
+    for voto in voti_memoria:
+        if voto["codice"] == codice:
+            return True
     return False
 
 def save_vote(codice, voto):
-    file_exists = os.path.exists(VOTI_FILE)
-    with open(VOTI_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["timestamp", "codice", "voto"])
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow({
-            "timestamp": datetime.now().isoformat(timespec="seconds"),
-            "codice": codice,
-            "voto": voto
-        })
+    voti_memoria.append({
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "codice": codice,
+        "voto": voto
+    })
+
+def votes_to_csv():
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["timestamp", "codice", "voto"])
+    writer.writeheader()
+    writer.writerows(voti_memoria)
+    return output.getvalue()
 
 @app.route("/")
 def index():
@@ -130,6 +116,10 @@ def index():
     #feedback {
       margin-top: 12px;
     }
+    a {
+      display: inline-block;
+      margin-top: 14px;
+    }
   </style>
 </head>
 <body>
@@ -151,6 +141,9 @@ def index():
       </form>
       <p id="feedback"></p>
     </div>
+
+    <a href="/voti" target="_blank">Vedi voti</a><br/>
+    <a href="/voti.csv" target="_blank">Scarica voti CSV</a>
   </div>
 
   <script>
@@ -249,5 +242,17 @@ def vota():
 
 @app.route("/voti")
 def voti():
-    dati = load_voti()
-    return jso
+    return jsonify(voti_memoria)
+
+@app.route("/voti.csv")
+def voti_csv():
+    csv_data = votes_to_csv()
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=voti.csv"}
+    )
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
