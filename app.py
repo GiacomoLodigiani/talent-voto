@@ -60,93 +60,195 @@ def leaderboard_top5():
 @app.route("/")
 def index():
     partecipanti = load_partecipanti()
-    opzioni_html = ""
+    cards_html = ""
     for i, nome in enumerate(partecipanti, start=1):
-        opzioni_html += f'<div class="candidate"><label><input type="radio" name="voto" value="{i}" required /> {i} - {nome}</label></div>'
+        cards_html += f"""
+        <label class="vote-card">
+          <div class="candidate-name">{nome}</div>
+          <input type="radio" name="voto" value="{i}" required />
+        </label>
+        """
 
     return render_template_string("""
 <!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Talent Voting</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       font-family: Arial, sans-serif;
-      max-width: 650px;
-      margin: 40px auto;
-      padding: 20px;
-      background: #f7f7f7;
+      margin: 0;
+      padding: 0;
+      background: #f4f6fb;
+      color: #111;
     }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
     .box {
       background: white;
-      padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border-radius: 18px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+      padding: 22px;
     }
+
+    h1 {
+      text-align: center;
+      margin: 0 0 22px 0;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      text-align: center;
+      margin: 0 0 18px 0;
+      color: #555;
+      font-size: 16px;
+    }
+
     label {
       display: block;
-      margin: 12px 0 6px;
-      font-weight: bold;
     }
-    input {
+
+    input[type="text"] {
       width: 100%;
-      padding: 10px;
-      box-sizing: border-box;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      font-size: 16px;
+      padding: 14px 14px;
+      border: 1px solid #cfd6e4;
+      border-radius: 12px;
+      font-size: 18px;
+      outline: none;
     }
-    button {
-      margin-top: 16px;
-      padding: 10px 18px;
+
+    .btn {
+      width: 100%;
+      margin-top: 14px;
+      padding: 14px 16px;
       border: none;
-      border-radius: 8px;
-      background: #4a67ff;
+      border-radius: 12px;
+      background: #355cff;
       color: white;
-      font-size: 16px;
+      font-size: 17px;
+      font-weight: 600;
       cursor: pointer;
     }
-    button:hover {
-      background: #3a55e0;
+
+    .btn:active {
+      transform: scale(0.99);
     }
+
     #voto-sezione {
       display: none;
-      margin-top: 20px;
+      margin-top: 18px;
     }
-    .candidate {
-      margin: 8px 0;
-      padding: 8px 0;
+
+    .options {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-top: 16px;
     }
+
+    .vote-card {
+      background: #f8f9fc;
+      border: 1px solid #dde3ef;
+      border-radius: 18px;
+      padding: 18px 14px 16px 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+
+    .vote-card:hover {
+      border-color: #b8c4df;
+      background: #f1f4fb;
+    }
+
+    .candidate-name {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 14px;
+      text-align: center;
+      word-break: break-word;
+    }
+
+    .vote-card input[type="radio"] {
+      width: 26px;
+      height: 26px;
+      margin: 0 auto;
+      display: block;
+      accent-color: #355cff;
+    }
+
     #errore {
       color: #c00;
       margin-top: 12px;
       display: none;
+      text-align: center;
+      font-weight: 600;
     }
+
     #feedback {
-      margin-top: 12px;
+      margin-top: 14px;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .links {
+      margin-top: 18px;
+      text-align: center;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .links a {
+      color: #355cff;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .links a + a {
+      margin-left: 14px;
+    }
+
+    @media (min-width: 700px) {
+      .options {
+        grid-template-columns: 1fr 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h1>Talent Show - Vota</h1>
+  <div class="container">
+    <div class="box">
+      <h1>Talent Show - Vota</h1>
+      <p class="subtitle">Inserisci il codice, poi scegli il tuo preferito.</p>
 
-    <div id="login">
-      <label for="codice">Inserisci il tuo codice</label>
-      <input type="text" id="codice" autocomplete="off" autofocus />
-      <button onclick="login()">Accedi</button>
-      <p id="errore"></p>
-    </div>
+      <div id="login">
+        <input type="text" id="codice" placeholder="Inserisci il tuo codice" autocomplete="off" autofocus />
+        <button class="btn" onclick="login()">Accedi</button>
+        <p id="errore"></p>
+      </div>
 
-    <div id="voto-sezione">
-      <h2>Codice valido. Scegli il tuo preferito:</h2>
-      <form id="form-voto">
-        {{ opzioni_html|safe }}
-        <button type="submit">Vota</button>
-      </form>
-      <p id="feedback"></p>
+      <div id="voto-sezione">
+        <h2 style="text-align:center; margin: 8px 0 0 0;">Codice valido. Scegli il tuo preferito:</h2>
+        <form id="form-voto">
+          <div class="options">
+            {{ cards_html|safe }}
+          </div>
+          <button class="btn" type="submit" style="margin-top:18px;">Vota</button>
+        </form>
+        <p id="feedback"></p>
+      </div>
     </div>
   </div>
 
@@ -189,12 +291,13 @@ def index():
 
     document.getElementById("form-voto").addEventListener("submit", function(e) {
       e.preventDefault();
-      const voto = document.querySelector('input[name="voto"]:checked').value;
+      const scelta = document.querySelector('input[name="voto"]:checked');
+      if (!scelta) return;
 
       fetch("/vota", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codice: codiceValido, voto })
+        body: JSON.stringify({ codice: codiceValido, voto: scelta.value })
       })
       .then(r => r.json())
       .then(data => {
@@ -214,7 +317,7 @@ def index():
   </script>
 </body>
 </html>
-""", opzioni_html=opzioni_html)
+""", cards_html=cards_html)
 
 @app.route("/check", methods=["POST"])
 def check():
@@ -267,12 +370,14 @@ def admin_risultati():
     <html>
     <head>
       <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Classifica</title>
       <style>
-        body {{ font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 20px; }}
-        table {{ width: 100%; border-collapse: collapse; }}
-        th, td {{ border: 1px solid #ccc; padding: 10px; text-align: left; }}
-        th {{ background: #f0f0f0; }}
+        body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 30px auto; padding: 20px; }}
+        h1 {{ text-align:center; }}
+        table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+        th, td {{ border: 1px solid #ccc; padding: 12px; text-align: left; }}
+        th {{ background: #f0f3ff; }}
       </style>
     </head>
     <body>
